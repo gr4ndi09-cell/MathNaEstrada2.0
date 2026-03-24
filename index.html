@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math na Estrada 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; 
+            background-color: #87CEEB; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            position: absolute; 
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999; 
+            transition: opacity 0.5s ease;
+        }
+        #loading-text {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #f1c40f;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 15px;
+            z-index: 10; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+            border: 4px solid #333;
+        }
+        .personagens {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .avatar {
+            width: 70px;
+            height: 70px;
+            background: #ccc;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 3px solid #555;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+        #pergunta {
+            font-size: 26px;
+            font-weight: 900;
+            margin: 15px 0;
+            color: #222;
+        }
+        .respostas {
+            display: flex;
+            justify-content: space-around;
+        }
+        button.btn-resposta {
+            padding: 12px 25px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid #222;
+            border-radius: 10px;
+            background-color: #f1c40f;
+            color: #333;
+            transition: 0.1s transform, 0.2s background;
+            box-shadow: 0 4px 0 #d4ac0d;
+        }
+        button.btn-resposta:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #d4ac0d;
+        }
+        button.btn-resposta:hover {
+            background-color: #f39c12;
+        }
+        #status-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000;
+        }
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div id="loading-text">Carregando Modelo 3D... 0%</div>
+    </div>
+
+    <div id="status-bar">Vida: ❤️❤️❤️❤️❤️</div>
+    
+    <div id="hud">
+        <div class="personagens">
+            <div class="avatar" style="background: #ff9999;">Mot.</div>
+            <div id="pergunta">Quanto é 5 x 4?</div>
+            <div class="avatar" style="background: #99ccff;">Pass.</div>
+        </div>
+        <div class="respostas">
+            <button class="btn-resposta" onclick="responder(15)">15</button>
+            <button class="btn-resposta" onclick="responder(20)">20</button>
+            <button class="btn-resposta" onclick="responder(25)">25</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATIO BASICA 3D
+        // ==========================================
+        const cena = new THREE.Scene();
+        cena.background = new THREE.Color(0x87CEEB); 
+        // Caligo longa ad celandum finem mundi (Névoa profunda)
+        cena.fog = new THREE.Fog(0x87CEEB, 50, 400); 
+
+        const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Camera pone currum (Câmera atrás do carro)
+        camera.position.set(-15, 6, 0); 
+        camera.lookAt(20, 2, 0);
+
+        const renderizador = new THREE.WebGLRenderer({ antialias: true });
+        renderizador.setSize(window.innerWidth, window.innerHeight);
+        renderizador.shadowMap.enabled = true; 
+        document.body.appendChild(renderizador.domElement);
+
+        const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.6); 
+        cena.add(luzAmbiente);
+
+        const luzSol = new THREE.DirectionalLight(0xffffff, 0.8); 
+        luzSol.position.set(10, 20, 10);
+        luzSol.castShadow = true;
+        cena.add(luzSol);
+
+        // ==========================================
+        // VIA INFINITA SEGMENTATA (A pista fatiada para curvas)
+        // ==========================================
+        const pedacosChao = [];
+        const geoPedaco = new THREE.BoxGeometry(10.5, 0.1, 40); 
+        const matPedaco = new THREE.MeshStandardMaterial({ color: 0x444444 }); 
+
+        // Creamus LX fragmenta viae (Criamos 60 pedaços de rua)
+        for (let i = 0; i < 60; i++) {
+            const pedaco = new THREE.Mesh(geoPedaco, matPedaco);
+            pedaco.position.x = i * 10 - 20; 
+            pedaco.receiveShadow = true;
+            cena.add(pedaco);
+            pedacosChao.push(pedaco);
+        }
+
+        // Lineae albae viae (As faixas brancas da pista)
+        const marcasPista = [];
+        const geoMarca = new THREE.BoxGeometry(5, 0.11, 0.4);
+        const matMarca = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        
+        for (let i = 0; i < 60; i++) {
+            const marcaEsq = new THREE.Mesh(geoMarca, matMarca);
+            marcaEsq.position.set(i * 10 - 20, 0, -2.5); 
+            cena.add(marcaEsq);
+            marcasPista.push({ mesh: marcaEsq, originalZ: -2.5 });
+
+            const marcaDir = new THREE.Mesh(geoMarca, matMarca);
+            marcaDir.position.set(i * 10 - 20, 0, 2.5); 
+            cena.add(marcaDir);
+            marcasPista.push({ mesh: marcaDir, originalZ: 2.5 });
+        }
+        
+        // ==========================================
+        // ONUS EXEMPLARIS (Carregamento do seu modelo)
+        // ==========================================
+        const carroGrupo = new THREE.Group();
+        carroGrupo.position.set(0, 0, 0); 
+        cena.add(carroGrupo);
+
+        const geoChassi = new THREE.BoxGeometry(6, 1.5, 2.5);
+        const matChassi = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+        const chassi = new THREE.Mesh(geoChassi, matChassi);
+        chassi.position.y = 1; 
+        chassi.castShadow = true;
+        carroGrupo.add(chassi);
+
+        const geoCabine = new THREE.BoxGeometry(3, 1.2, 2.2);
+        const matCabine = new THREE.MeshStandardMaterial({ color: 0x3498db });
+        const cabine = new THREE.Mesh(geoCabine, matCabine);
+        cabine.position.set(-0.5, 2.3, 0);
+        cabine.castShadow = true;
+        carroGrupo.add(cabine);
+
+        let rodasDoCarro = [];
+        const urlDoSeuCarro = "https://raw.githubusercontent.com/gr4ndi09-cell/MathNaEstrada2.0/main/assets/carros/player/carro1/carro1.glb";
+        const carregadorGLTF = new THREE.GLTFLoader();
+        
+        // ADICIONADO: Força o navegador a aceitar os dados do GitHub sem bloqueios de segurança (CORS)
+        carregadorGLTF.setCrossOrigin('anonymous'); 
+
+        carregadorGLTF.load(
+            urlDoSeuCarro,
+            function (gltf) {
+                const modeloReal = gltf.scene;
+                
+                // CORRIGIDO: Retornamos à escala neutra (1) e removemos a rotação forçada 
+                // que estava engolindo a câmera ou escondendo o modelo.
+                modeloReal.scale.set(1, 1, 1); 
+                modeloReal.rotation.y = 0; 
+
+                modeloReal.traverse(function(node) {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                    const nomeMin = node.name.toLowerCase();
+                    if (nomeMin.includes('roda') || nomeMin.includes('wheel') || nomeMin.includes('pneu') || nomeMin.includes('tire') || nomeMin.includes('cylinder')) {
+                        rodasDoCarro.push(node);
+                    }
+                });
+
+                carroGrupo.add(modeloReal);
+                chassi.visible = false;
+                cabine.visible = false;
+                
+                const loadingScreen = document.getElementById('loading-screen');
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
+            },
+            function (xhr) {
+                if (xhr.total > 0) {
+                    const progresso = Math.round((xhr.loaded / xhr.total) * 100);
+                    document.getElementById('loading-text').innerText = `Carregando Modelo 3D... ${progresso}%`;
+                }
+            },
+            function (erro) {
+                console.error('ERRO AO CARREGAR O MODELO 3D:', erro);
+                // Removi o 'alert' obstrusivo que travava a tela no caso de oscilação da internet
+                document.getElementById('loading-text').innerText = "Erro ao baixar. Usando carro base.";
+                setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 2000);
+            }
+        );
+
+        // ==========================================
+        // REGULAE LUDI (Controles e Vida)
+        // ==========================================
+        const faixasZ = [-5, 0, 5]; 
+        let faixaAtual = 1; 
+        
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
+                if (faixaAtual > 0) faixaAtual--;
+            } 
+            else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
+                if (faixaAtual < 2) faixaAtual++;
+            }
+        });
+
+        let vida = 5;
+        let danoAnimacao = 0; 
+
+        window.responder = function(resposta) {
+            if (resposta === 20) {
+                if(vida < 5) vida++;
+                atualizarVida();
+                alert("Correto! Ganhou fôlego!"); 
+            } else {
+                vida--;
+                atualizarVida();
+                danoAnimacao = 1.5; 
+                if(vida <= 0) alert("Fim de Jogo! O carro quebrou.");
+            }
+        };
+
+        function atualizarVida() {
+            document.getElementById('status-bar').innerText = "Vida: " + "❤️".repeat(vida);
+        }
+
+        // ==========================================
+        // ANIMATIO MAGICA (Game Loop)
+        // ==========================================
+        let tempoCurva = 0;
+
+        function animar() {
+            requestAnimationFrame(animar);
+            tempoCurva += 0.01;
+
+            // Animação de Pulo do Dano
+            if (danoAnimacao > 0) {
+                carroGrupo.position.y = danoAnimacao;
+                danoAnimacao -= 0.1; 
+            } else {
+                carroGrupo.position.y = 0;
+            }
+
+            // Mudança de Faixa do Carro
+            const alvoZ = faixasZ[faixaAtual];
+            const diferencaZ = alvoZ - carroGrupo.position.z;
+            carroGrupo.position.z += diferencaZ * 0.1;
+            carroGrupo.rotation.x = diferencaZ * 0.05;
+
+            // Camera sequitur currum leniter (Câmera segue o carro suavemente)
+            camera.position.z += (carroGrupo.position.z * 0.4 - camera.position.z) * 0.05;
+            camera.lookAt(20, 2, camera.position.z * 0.5);
+
+            // ------------------------------------------
+            // MATHEMATICA MUNDI CURVI (A Matemática da Curva)
+            // ------------------------------------------
+            const velocitasViae = 1.0;
+            // Oscilamos a curva e a colina usando o Tempo
+            const intensitasCurvae = Math.sin(tempoCurva * 0.8) * 0.0015; // Curva esquerda/direita
+            const intensitasCollis = Math.cos(tempoCurva * 0.5) * 0.001;  // Subida/Descida
+
+            // Deformamus pavimentum (Distorcendo os pedaços de chão)
+            pedacosChao.forEach(pedaco => {
+                pedaco.position.x -= velocitasViae;
+                if (pedaco.position.x < -20) pedaco.position.x += 600;
+
+                const dist = Math.max(0, pedaco.position.x);
+                pedaco.position.z = intensitasCurvae * dist * dist;
+                pedaco.position.y = intensitasCollis * dist * dist;
+                
+                pedaco.rotation.z = 2 * intensitasCollis * dist; // Inclinação da colina (Pitch)
+                pedaco.rotation.x = -2 * intensitasCurvae * dist; // Inclinação lateral (Bank)
+            });
+
+            // Deformamus lineas (Distorcendo as linhas brancas)
+            marcasPista.forEach(marca => {
+                marca.mesh.position.x -= velocitasViae;
+                if (marca.mesh.position.x < -20) marca.mesh.position.x += 600;
+
+                const dist = Math.max(0, marca.mesh.position.x);
+                marca.mesh.position.z = marca.originalZ + (intensitasCurvae * dist * dist);
+                marca.mesh.position.y = (intensitasCollis * dist * dist);
+                
+                marca.mesh.rotation.z = 2 * intensitasCollis * dist;
+                marca.mesh.rotation.x = -2 * intensitasCurvae * dist;
+            });
+
+            // Rotatio rotarum (Girando as rodas)
+            rodasDoCarro.forEach(function(roda) {
+                roda.rotation.x -= 0.2; 
+            });
+
+            renderizador.render(cena, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animar();
+    </script>
+</body>
+</html>
+
+
+
+
