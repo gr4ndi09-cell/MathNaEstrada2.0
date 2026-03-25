@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -132,14 +132,14 @@
 
     <div id="loading-screen">
         <div class="spinner"></div>
-        <div id="loading-text">Carregando Modelo 3D... 0%</div>
+        <div id="loading-text">A carregar Modelo 3D... 0%</div>
     </div>
 
     <div id="status-bar">Vida: ❤️❤️❤️❤️❤️</div>
     
     <div id="hud">
         <div class="personagens">
-            <div class="avatar" style="background: #ff9999;">Mot.</div>
+            <div class="avatar" style="background: #ff9999;">Cond.</div>
             <div id="pergunta">Quanto é 5 x 4?</div>
             <div class="avatar" style="background: #99ccff;">Pass.</div>
         </div>
@@ -152,15 +152,43 @@
 
     <script>
         // ==========================================
-        // CONFIGURATIO BASICA 3D
+        // TEXTURAS PROCEDIMENTAIS (Geradas por código)
+        // ==========================================
+        
+        function criarTexturaAsfalto() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#333333'; 
+            context.fillRect(0, 0, 256, 256);
+            for(let i=0; i<3000; i++) {
+                context.fillStyle = Math.random() > 0.5 ? '#222222' : '#444444'; 
+                context.fillRect(Math.random()*256, Math.random()*256, 2, 2);
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function criarTexturaRelva() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#2d5a27'; 
+            context.fillRect(0, 0, 256, 256);
+            for(let i=0; i<4000; i++) {
+                context.fillStyle = Math.random() > 0.5 ? '#234d20' : '#3a7c31'; 
+                context.fillRect(Math.random()*256, Math.random()*256, 3, 3);
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // ==========================================
+        // CONFIGURAÇÃO BÁSICA 3D
         // ==========================================
         const cena = new THREE.Scene();
         cena.background = new THREE.Color(0x87CEEB); 
-        // Caligo longa ad celandum finem mundi (Névoa profunda)
-        cena.fog = new THREE.Fog(0x87CEEB, 50, 400); 
+        cena.fog = new THREE.Fog(0x87CEEB, 30, 300); // Névoa para disfarçar o horizonte
 
         const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Camera pone currum (Câmera atrás do carro)
         camera.position.set(-15, 6, 0); 
         camera.lookAt(20, 2, 0);
 
@@ -169,7 +197,7 @@
         renderizador.shadowMap.enabled = true; 
         document.body.appendChild(renderizador.domElement);
 
-        const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.6); 
+        const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.7); 
         cena.add(luzAmbiente);
 
         const luzSol = new THREE.DirectionalLight(0xffffff, 0.8); 
@@ -178,45 +206,60 @@
         cena.add(luzSol);
 
         // ==========================================
-        // VIA INFINITA SEGMENTATA (A pista fatiada para curvas)
+        // CONSTRUÇÃO DO MUNDO SEGMENTADO (Pista + Laterais)
         // ==========================================
         const pedacosChao = [];
-        const geoPedaco = new THREE.BoxGeometry(10.5, 0.1, 40); 
-        const matPedaco = new THREE.MeshStandardMaterial({ color: 0x444444 }); 
-
-        // Creamus LX fragmenta viae (Criamos 60 pedaços de rua)
-        for (let i = 0; i < 60; i++) {
-            const pedaco = new THREE.Mesh(geoPedaco, matPedaco);
-            pedaco.position.x = i * 10 - 20; 
-            pedaco.receiveShadow = true;
-            cena.add(pedaco);
-            pedacosChao.push(pedaco);
-        }
-
-        // Lineae albae viae (As faixas brancas da pista)
-        const marcasPista = [];
-        const geoMarca = new THREE.BoxGeometry(5, 0.11, 0.4);
-        const matMarca = new THREE.MeshBasicMaterial({ color: 0xffffff });
         
-        for (let i = 0; i < 60; i++) {
-            const marcaEsq = new THREE.Mesh(geoMarca, matMarca);
-            marcaEsq.position.set(i * 10 - 20, 0, -2.5); 
-            cena.add(marcaEsq);
-            marcasPista.push({ mesh: marcaEsq, originalZ: -2.5 });
+        const matAsfalto = new THREE.MeshStandardMaterial({ map: criarTexturaAsfalto(), roughness: 0.9 });
+        const matRelva = new THREE.MeshStandardMaterial({ map: criarTexturaRelva(), roughness: 1.0 });
+        const matLinha = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-            const marcaDir = new THREE.Mesh(geoMarca, matMarca);
-            marcaDir.position.set(i * 10 - 20, 0, 2.5); 
-            cena.add(marcaDir);
-            marcasPista.push({ mesh: marcaDir, originalZ: 2.5 });
+        // SOLUÇÃO 1 (Sobreposição): Aumentamos o comprimento (X) de 10 para 10.5 para esconder as frestas
+        const geoAsfalto = new THREE.BoxGeometry(10.5, 0.2, 12); 
+        const geoRelva = new THREE.BoxGeometry(10.5, 0.1, 60);   
+        const geoLinha = new THREE.BoxGeometry(5, 0.25, 0.4);  
+
+        for (let i = 0; i < 60; i++) {
+            const segmentoGrupo = new THREE.Group(); 
+            // O espaçamento continua de 10 em 10, gerando o overlap de 0.5
+            segmentoGrupo.position.x = i * 10 - 20; 
+
+            const asfalto = new THREE.Mesh(geoAsfalto, matAsfalto);
+            asfalto.receiveShadow = true;
+            segmentoGrupo.add(asfalto);
+
+            const relvaEsq = new THREE.Mesh(geoRelva, matRelva);
+            relvaEsq.position.z = -36; 
+            relvaEsq.receiveShadow = true;
+            segmentoGrupo.add(relvaEsq);
+
+            const relvaDir = new THREE.Mesh(geoRelva, matRelva);
+            relvaDir.position.z = 36; 
+            relvaDir.receiveShadow = true;
+            segmentoGrupo.add(relvaDir);
+
+            if (i % 2 === 0) { 
+                const linhaEsq = new THREE.Mesh(geoLinha, matLinha);
+                linhaEsq.position.z = -2.5;
+                segmentoGrupo.add(linhaEsq);
+
+                const linhaDir = new THREE.Mesh(geoLinha, matLinha);
+                linhaDir.position.z = 2.5;
+                segmentoGrupo.add(linhaDir);
+            }
+
+            cena.add(segmentoGrupo);
+            pedacosChao.push(segmentoGrupo);
         }
         
         // ==========================================
-        // ONUS EXEMPLARIS (Carregamento do seu modelo)
+        // CARREGAMENTO DO SEU MODELO 3D
         // ==========================================
         const carroGrupo = new THREE.Group();
-        carroGrupo.position.set(0, 0, 0); 
+        carroGrupo.position.set(0, 0.1, 0); 
         cena.add(carroGrupo);
 
+        // Carro substituto (Placeholder) enquanto o verdadeiro não carrega
         const geoChassi = new THREE.BoxGeometry(6, 1.5, 2.5);
         const matChassi = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
         const chassi = new THREE.Mesh(geoChassi, matChassi);
@@ -224,29 +267,17 @@
         chassi.castShadow = true;
         carroGrupo.add(chassi);
 
-        const geoCabine = new THREE.BoxGeometry(3, 1.2, 2.2);
-        const matCabine = new THREE.MeshStandardMaterial({ color: 0x3498db });
-        const cabine = new THREE.Mesh(geoCabine, matCabine);
-        cabine.position.set(-0.5, 2.3, 0);
-        cabine.castShadow = true;
-        carroGrupo.add(cabine);
-
         let rodasDoCarro = [];
         const urlDoSeuCarro = "https://raw.githubusercontent.com/gr4ndi09-cell/MathNaEstrada2.0/main/assets/carros/player/carro1/carro1.glb";
         const carregadorGLTF = new THREE.GLTFLoader();
-        
-        // ADICIONADO: Força o navegador a aceitar os dados do GitHub sem bloqueios de segurança (CORS)
-        carregadorGLTF.setCrossOrigin('anonymous'); 
+        carregadorGLTF.setCrossOrigin('anonymous');
 
         carregadorGLTF.load(
             urlDoSeuCarro,
             function (gltf) {
                 const modeloReal = gltf.scene;
-                
-                // CORRIGIDO: Retornamos à escala neutra (1) e removemos a rotação forçada 
-                // que estava engolindo a câmera ou escondendo o modelo.
                 modeloReal.scale.set(1, 1, 1); 
-                modeloReal.rotation.y = 0; 
+                modeloReal.rotation.y = Math.PI / 2; 
 
                 modeloReal.traverse(function(node) {
                     if (node.isMesh) {
@@ -260,8 +291,7 @@
                 });
 
                 carroGrupo.add(modeloReal);
-                chassi.visible = false;
-                cabine.visible = false;
+                chassi.visible = false; // Esconde o carro vermelho de teste
                 
                 const loadingScreen = document.getElementById('loading-screen');
                 loadingScreen.style.opacity = '0';
@@ -270,30 +300,76 @@
             function (xhr) {
                 if (xhr.total > 0) {
                     const progresso = Math.round((xhr.loaded / xhr.total) * 100);
-                    document.getElementById('loading-text').innerText = `Carregando Modelo 3D... ${progresso}%`;
+                    document.getElementById('loading-text').innerText = `A carregar Modelo 3D... ${progresso}%`;
                 }
             },
             function (erro) {
                 console.error('ERRO AO CARREGAR O MODELO 3D:', erro);
-                // Removi o 'alert' obstrusivo que travava a tela no caso de oscilação da internet
-                document.getElementById('loading-text').innerText = "Erro ao baixar. Usando carro base.";
+                document.getElementById('loading-text').innerText = "Erro ao carregar. A usar carro base.";
                 setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 2000);
             }
         );
 
         // ==========================================
-        // REGULAE LUDI (Controles e Vida)
+        // REGRAS DO JOGO E CONTROLOS
         // ==========================================
         const faixasZ = [-5, 0, 5]; 
         let faixaAtual = 1; 
         
+        // NOVAS VARIÁVEIS DE FÍSICA E VELOCIDADE
+        let velocidadeAtual = 1.2;
+        const velocidadeMaxima = 4.0; // "Supersónico"
+        const velocidadeMinima = 0.4; // Nunca para totalmente
+        const controles = { acelera: false, trava: false };
+
+        // SISTEMA DE PARTÍCULAS (Fumaça e Fogo em blocos)
+        const particulas = [];
+        const geoParticula = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        
+        function criarParticula(tipo) {
+            const cor = tipo === 'fumo' ? 0x888888 : (Math.random() > 0.5 ? 0xff4500 : 0xffd700);
+            const mat = new THREE.MeshBasicMaterial({ 
+                color: cor, transparent: true, opacity: tipo === 'fumo' ? 0.5 : 0.9 
+            });
+            const p = new THREE.Mesh(geoParticula, mat);
+            
+            // Posição baseada no carro (Traseira = X negativo)
+            const zOffset = Math.random() > 0.5 ? 1.2 : -1.2; // Esquerda ou Direita
+            const xOffset = tipo === 'fumo' ? -2.0 : -3.0;    // Rodas ou Escape
+            const yOffset = tipo === 'fumo' ? 0.2 : 0.5;
+
+            p.position.set(carroGrupo.position.x + xOffset, carroGrupo.position.y + yOffset, carroGrupo.position.z + zOffset);
+
+            // Comportamento da partícula
+            p.userData = {
+                velX: -(velocidadeAtual * 0.6) - Math.random() * 0.2, // Fica para trás na pista
+                velY: tipo === 'fumo' ? 0.05 + Math.random() * 0.05 : Math.random() * 0.03, // Fumo sobe mais
+                velZ: (Math.random() - 0.5) * 0.05, // Espalha para os lados
+                fade: tipo === 'fumo' ? 0.015 : 0.08 // Fogo apaga mais depressa
+            };
+
+            cena.add(p);
+            particulas.push(p);
+        }
+
         window.addEventListener('keydown', (event) => {
+            // Acelerar e Travar
+            if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') controles.acelera = true;
+            if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') controles.trava = true;
+
+            // Mudança de faixa
             if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
                 if (faixaAtual > 0) faixaAtual--;
             } 
             else if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
                 if (faixaAtual < 2) faixaAtual++;
             }
+        });
+
+        // Evento para quando soltamos a tecla
+        window.addEventListener('keyup', (event) => {
+            if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') controles.acelera = false;
+            if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') controles.trava = false;
         });
 
         let vida = 5;
@@ -308,7 +384,7 @@
                 vida--;
                 atualizarVida();
                 danoAnimacao = 1.5; 
-                if(vida <= 0) alert("Fim de Jogo! O carro quebrou.");
+                if(vida <= 0) alert("Fim de Jogo! O carro avariou.");
             }
         };
 
@@ -317,7 +393,7 @@
         }
 
         // ==========================================
-        // ANIMATIO MAGICA (Game Loop)
+        // GAME LOOP (A Matemática da Curva e Animações)
         // ==========================================
         let tempoCurva = 0;
 
@@ -325,61 +401,101 @@
             requestAnimationFrame(animar);
             tempoCurva += 0.01;
 
-            // Animação de Pulo do Dano
             if (danoAnimacao > 0) {
                 carroGrupo.position.y = danoAnimacao;
                 danoAnimacao -= 0.1; 
             } else {
-                carroGrupo.position.y = 0;
+                carroGrupo.position.y = 0.1;
             }
 
-            // Mudança de Faixa do Carro
+            // --- LÓGICA DE VELOCIDADE E PARTÍCULAS ---
+            if (controles.acelera) {
+                // Acelera rápido no início e abranda perto do limite máximo
+                velocidadeAtual += (velocidadeMaxima - velocidadeAtual) * 0.015;
+                // Deita chamas pelo escape ao acelerar
+                if (Math.random() > 0.4) criarParticula('fogo');
+            } else if (controles.trava) {
+                // Trava bruscamente se estiver rápido, mais suave se estiver devagar
+                velocidadeAtual -= (velocidadeAtual - velocidadeMinima) * 0.05;
+                // Deita fumo dos pneus apenas se estiver acima de uma certa velocidade
+                if (velocidadeAtual > 1.0 && Math.random() > 0.2) criarParticula('fumo');
+            } else {
+                // Arrasto natural: regressa à velocidade de cruzeiro (1.2)
+                velocidadeAtual += (1.2 - velocidadeAtual) * 0.02;
+            }
+
+            // Atualizamos as partículas ativas na cena
+            for (let i = particulas.length - 1; i >= 0; i--) {
+                const p = particulas[i];
+                p.position.x += p.userData.velX;
+                p.position.y += p.userData.velY;
+                p.position.z += p.userData.velZ;
+                p.scale.multiplyScalar(0.95); // Encolhe ao longo do tempo
+                p.material.opacity -= p.userData.fade;
+                
+                if (p.material.opacity <= 0) {
+                    cena.remove(p);
+                    p.geometry.dispose();
+                    p.material.dispose();
+                    particulas.splice(i, 1);
+                }
+            }
+
+            // --- LÓGICA DE MOVIMENTAÇÃO E ROTAÇÃO DO CARRO ---
+
             const alvoZ = faixasZ[faixaAtual];
             const diferencaZ = alvoZ - carroGrupo.position.z;
-            carroGrupo.position.z += diferencaZ * 0.1;
-            carroGrupo.rotation.x = diferencaZ * 0.05;
 
-            // Camera sequitur currum leniter (Câmera segue o carro suavemente)
+            // 1. Movemos a posição Z (suavemente)
+            carroGrupo.position.z += diferencaZ * 0.1;
+
+            // 2. NOVA ROTAÇÃO: Virar a frente (Eixo Y)
+            const anguloAlvoY = diferencaZ * -0.06;
+            carroGrupo.rotation.y += (anguloAlvoY - carroGrupo.rotation.y) * 0.2;
+
+            // 3. FÍSICA DE INCLINAÇÃO (Pitch - Eixo Z)
+            let pitchAlvo = 0;
+            if (controles.acelera) {
+                pitchAlvo = 0.15; // Levanta o nariz, rebaixa a traseira
+            } else if (controles.trava) {
+                pitchAlvo = -0.2; // Desce o nariz, rebaixa a dianteira
+            }
+            carroGrupo.rotation.z += (pitchAlvo - carroGrupo.rotation.z) * 0.1;
+
+            // -------------------------------------------------
+
+            // Câmera segue o carro suavemente
             camera.position.z += (carroGrupo.position.z * 0.4 - camera.position.z) * 0.05;
             camera.lookAt(20, 2, camera.position.z * 0.5);
 
-            // ------------------------------------------
-            // MATHEMATICA MUNDI CURVI (A Matemática da Curva)
-            // ------------------------------------------
-            const velocitasViae = 1.0;
-            // Oscilamos a curva e a colina usando o Tempo
-            const intensitasCurvae = Math.sin(tempoCurva * 0.8) * 0.0015; // Curva esquerda/direita
-            const intensitasCollis = Math.cos(tempoCurva * 0.5) * 0.001;  // Subida/Descida
+            // ==========================================
+            // SOLUÇÃO 3: Atenuar a matemática (Curvas mais suaves)
+            // ==========================================
+            // Substituímos a velocidade estática pela nossa velocidadeAtual
+            const velocitasViae = velocidadeAtual;
+            
+            // Reduzimos os multiplicadores de 0.0015 para 0.0004 para criar uma estrada mais real e suave
+            const intensitasCurvae = Math.sin(tempoCurva * 0.4) * 0.0004; 
+            const intensitasCollis = Math.cos(tempoCurva * 0.3) * 0.0004;  
 
-            // Deformamus pavimentum (Distorcendo os pedaços de chão)
-            pedacosChao.forEach(pedaco => {
-                pedaco.position.x -= velocitasViae;
-                if (pedaco.position.x < -20) pedaco.position.x += 600;
+            // Agora movemos e deformamos o GRUPO inteiro (Asfalto + Relva + Linhas ao mesmo tempo!)
+            pedacosChao.forEach(segmento => {
+                segmento.position.x -= velocitasViae;
+                if (segmento.position.x < -20) segmento.position.x += 580;
 
-                const dist = Math.max(0, pedaco.position.x);
-                pedaco.position.z = intensitasCurvae * dist * dist;
-                pedaco.position.y = intensitasCollis * dist * dist;
+                const dist = Math.max(0, segmento.position.x);
+                segmento.position.z = intensitasCurvae * dist * dist;
+                segmento.position.y = intensitasCollis * dist * dist;
                 
-                pedaco.rotation.z = 2 * intensitasCollis * dist; // Inclinação da colina (Pitch)
-                pedaco.rotation.x = -2 * intensitasCurvae * dist; // Inclinação lateral (Bank)
+                // SOLUÇÃO 2: Removemos a torção! O bloco fica reto, apenas se desloca.
+                // Isso acaba de vez com o efeito "fatiado" nas bordas.
+                segmento.rotation.z = 0; 
+                segmento.rotation.x = 0; 
             });
 
-            // Deformamus lineas (Distorcendo as linhas brancas)
-            marcasPista.forEach(marca => {
-                marca.mesh.position.x -= velocitasViae;
-                if (marca.mesh.position.x < -20) marca.mesh.position.x += 600;
-
-                const dist = Math.max(0, marca.mesh.position.x);
-                marca.mesh.position.z = marca.originalZ + (intensitasCurvae * dist * dist);
-                marca.mesh.position.y = (intensitasCollis * dist * dist);
-                
-                marca.mesh.rotation.z = 2 * intensitasCollis * dist;
-                marca.mesh.rotation.x = -2 * intensitasCurvae * dist;
-            });
-
-            // Rotatio rotarum (Girando as rodas)
+            // Gira as rodas do modelo 3D carregado (agora dependente da velocidade)
             rodasDoCarro.forEach(function(roda) {
-                roda.rotation.x -= 0.2; 
+                roda.rotation.x -= velocidadeAtual * 0.15; 
             });
 
             renderizador.render(cena, camera);
@@ -395,7 +511,3 @@
     </script>
 </body>
 </html>
-
-
-
-
